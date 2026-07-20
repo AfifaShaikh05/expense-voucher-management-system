@@ -1,0 +1,33 @@
+# ─── Environment files (never commit real secrets) ───────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+
+# ─── Node dependencies ────────────────────────────────────────────────────────
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# ─── Build output ─────────────────────────────────────────────────────────────
+frontend/dist/
+frontend/build/
+
+# ─── Uploaded signature images (local disk storage) ──────────────────────────
+backend/src/uploads/signatures/*
+# Keep the directory itself tracked via .gitkeep
+!backend/src/uploads/signatures/.gitkeep
+
+# ─── Prisma ───────────────────────────────────────────────────────────────────
+backend/prisma/.env
+
+# ─── OS & Editor artifacts ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

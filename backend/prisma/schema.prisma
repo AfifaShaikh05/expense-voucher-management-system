@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  DIRECTOR
+  ACCOUNTS
+}
+
+enum VoucherStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  password     String
+  employeeId   String?
+  role         Role
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  vouchers     Voucher[] @relation("EmployeeVouchers")
+  approvals    Voucher[] @relation("DirectorApprovals")
+}
+
+model Voucher {
+  id                  String        @id @default(uuid())
+  voucherNumber       String        @unique
+  voucherDate         DateTime      @default(now())
+  expenseDate         DateTime
+  departmentName      String
+  expenseTitle        String
+  expenseCategory     String
+  expenseDescription  String?
+  amount              Float
+
+  employeeId          String
+  employee            User          @relation("EmployeeVouchers", fields: [employeeId], references: [id])
+  employeeSignature   String?
+
+  status              VoucherStatus @default(DRAFT)
+  directorId          String?
+  director            User?         @relation("DirectorApprovals", fields: [directorId], references: [id])
+  directorSignature   String?
+  approvalDate        DateTime?
+  rejectionReason     String?
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}

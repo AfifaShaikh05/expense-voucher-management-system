@@ -1,0 +1,35 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.5rem;
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.greeting {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.role {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin-left: 0.25rem;
+}
+
+.logoutBtn {
+  padding: 0.4rem 1rem;
+  background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.logoutBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: #fff;
+}
