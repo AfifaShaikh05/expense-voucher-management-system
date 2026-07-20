@@ -270,7 +270,7 @@ DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/vouchers/dashboard` | Employee dashboard statistics |
-| `GET` | `/api/vouchers/my` | Paginated list of own vouchers |
+| `GET` | `/api/vouchers/my` | Paginated list of own vouchers; currently consumed inside the Employee Dashboard's embedded "My Vouchers" card |
 | `POST` | `/api/vouchers` | Create a new voucher (saved as `DRAFT`) |
 | `GET` | `/api/vouchers/:id` | Get own voucher details |
 | `PUT` | `/api/vouchers/:id` | Update a `DRAFT` voucher |
@@ -324,23 +324,7 @@ DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED
 | `sortBy` | `string` | One of: `voucherDate`, `expenseDate`, `amount`, `status`, `createdAt` |
 | `sortOrder` | `string` | `asc` or `desc` (default: `desc`) |
 
----
-
-## Assumptions Made During Development
-
-1. **Local disk signature storage:** Signature images (both employee and director) are stored on the server's local filesystem at `backend/src/uploads/signatures/` using Multer's `diskStorage` engine and served as static files via Express. This is a development-appropriate simplification. In a production system, these would be stored in an object storage service (AWS S3, Cloudinary, or Supabase Storage) for durability, scalability, and CDN delivery.
-
-2. **`SUBMITTED` vs `PENDING_APPROVAL` are distinct statuses:** The Prisma schema defines both `SUBMITTED` and `PENDING_APPROVAL` as separate enum values. In the current implementation, when an employee submits a voucher, it transitions directly from `DRAFT` → `PENDING_APPROVAL` (skipping `SUBMITTED`). The `SUBMITTED` status was retained in the enum for potential future use (e.g., a multi-stage review process) but is not set by any current route.
-
-3. **Voucher number generation is sequential, not transactional:** Voucher numbers are generated in the format `VCH-YYYY-XXXXXX` by querying the most recent voucher for the current year and incrementing. Under very high concurrency (multiple simultaneous creates), there is a theoretical race condition where two vouchers could receive the same number. For this single-company use case, this was accepted; a production implementation would use a database sequence or advisory lock.
-
-4. **Public registration endpoint:** There is no admin UI to create users. The `POST /api/auth/register` endpoint is public and accepts the `role` field directly in the request body. This is a deliberate developer convenience for the internship demo environment. In production, role assignment would be restricted to an admin action.
-
-5. **Signature deletion removes the file from disk:** When a signature is deleted (employee removing theirs, or the system clearing one on rejection), the actual file is removed from the filesystem using `fs.unlinkSync`. The `try/catch` wrapping makes this best-effort — if the file is already missing, the database record is still cleared.
-
-6. **Supabase connection pooler `connection_limit`:** The `DATABASE_URL` is configured with `connection_limit=2` because Supabase's free-tier session-mode pooler has a hard cap of 15 connections. During development with Nodemon hot-reloading, each restart could accumulate stale connections. This limit should be revisited and likely removed when deploying to a production environment with a proper connection pooler (e.g., PgBouncer in transaction mode).
-
-7. **No "Submitted" intermediate state shown in UI:** The frontend `STATUS_META` map includes `SUBMITTED` as a displayable badge, but because the backend skips this state in the current workflow, users will not encounter it in practice.
+> **Status visibility note:** `DRAFT` is only valid/returnable for the Employee's own voucher list. Director and Accounts endpoints exclude `DRAFT` server-side even if `?status=DRAFT` is passed, per the Draft-visibility decision documented in Assumptions.
 
 ---
 
@@ -352,6 +336,8 @@ DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED
 - **Public registration:** The `/api/auth/register` endpoint is open. In production, this should be moved behind an admin-only authenticated route.
 - **No refresh token mechanism:** JWT tokens expire and the user is logged out. There is no silent token refresh — the user must log in again.
 - **Voucher number race condition:** See Assumptions section. Not a practical issue for single-instance deployment but a known gap.
+- **Amount cap is frontend-only:** Create/Edit forms prevent values above ₹99,000, but the backend voucher create/update controllers only validate that `amount` is a positive number. A direct API call can currently bypass the cap.
+- **Stale unreferenced My Vouchers component:** `frontend/src/pages/employee/MyVouchers.jsx` still exists, but `/employee/vouchers` redirects to `/employee/dashboard` and the component is not imported into `App.jsx` routing. It can be deleted in a follow-up cleanup.
 - **Category list is hardcoded on the frontend:** The list of expense categories (`Travel`, `Meals`, `Accommodation`, etc.) is a static array in the React components rather than being fetched from a configuration endpoint. Adding a category requires a code change.
 
 ---
@@ -413,7 +399,6 @@ voucher-management/
     │       │   └── LoginPage.jsx
     │       ├── employee/
     │       │   ├── EmployeeDashboard.jsx
-    │       │   ├── MyVouchers.jsx
     │       │   ├── CreateVoucher.jsx
     │       │   ├── EditVoucher.jsx
     │       │   ├── VoucherDetails.jsx
@@ -434,44 +419,4 @@ voucher-management/
 
 ---
 
-## Assumptions Made During Development
-
-The assignment specification contained several points of ambiguity. Where the spec was unclear, a deliberate, documented decision was made rather than silently picking one interpretation.
-
-### 1. Draft Vouchers Are Invisible to Director and Accounts Team
-
-**Spec ambiguity:** Section 10 (Business Rules) states "The Director can view every voucher in the organization" with no explicit status restriction. However, Section 4 (Workflow) shows `DRAFT` as a pre-submission, employee-only working state, and Section 3.1 confirms employees can freely edit and delete vouchers while in `DRAFT`.
-
-**Decision adopted:** `DRAFT` vouchers are treated as **private, unsubmitted employee working documents**. They are excluded from Director and Accounts Team visibility entirely. A voucher only becomes visible to those roles once the employee explicitly submits it (status transitions to `PENDING_APPROVAL`).
-
-**Reasoning:**
-- A draft has not entered the approval workflow — showing it to a Director would expose incomplete, uncommitted data.
-- Allowing a Director to view drafts would create confusion: they might attempt to approve/reject something the employee hasn't finished or decided to discard.
-- The Accounts team's role is financial record-keeping of *completed* transactions, not monitoring works-in-progress.
-- This interpretation aligns with standard enterprise document lifecycle patterns (e.g., a draft purchase order is not visible to approvers until submitted).
-
-**Implementation:**
-- Backend: Both `GET /api/director/vouchers` and `GET /api/accounts/vouchers` have an explicit `status: { not: 'DRAFT' }` Prisma filter applied server-side — even if a frontend client tries to pass `?status=DRAFT`, the filter is overridden.
-- Backend: The Accounts dashboard `totalVouchers` count excludes Drafts.
-- Backend: The Director dashboard recent activity feed excludes Drafts.
-- Frontend: The status filter dropdowns in Director "All Vouchers" and Accounts "All Vouchers" do not offer "Draft" as an option, since it can never be a valid result for those roles.
-
----
-
-### 2. Submission Requires Signature
-
-**Decision:** An employee cannot submit a voucher for approval until they have uploaded their signature. The submit button is disabled and a warning is shown if no signature is present.
-
-**Reasoning:** The assignment spec showed signature as part of the physical form. Making it mandatory before submission enforces data completeness before the voucher enters the approval queue.
-
----
-
-### 3. Amount Validation Cap
-
-**Decision:** The expense amount is capped at ₹99,000 per voucher.
-
-**Reasoning:** The spec did not specify a maximum amount. A practical upper-bound was set to prevent data entry errors (e.g., typing an extra zero) and to reflect realistic expense reimbursement limits for an internship-stage company workflow.
-
----
-
-*Built by Afifa Shaikh as part of the Full Stack Developer.*
+*Built by Afifa Shaikh.*

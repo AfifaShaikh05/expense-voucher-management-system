@@ -25,7 +25,7 @@ const validate = (form) => {
     errors.amount = 'Amount is required';
   } else if (Number.isNaN(Number(form.amount)) || Number(form.amount) <= 0) {
     errors.amount = 'Amount must be a positive number';
-  } else if (Number(form.amount) > 99000) {
+  } else if (Number(form.amount) > 99999) {
     errors.amount = 'Amount cannot exceed INR 99,000';
   }
   return errors;
@@ -147,7 +147,7 @@ const CreateVoucher = () => {
                   value={form.amount}
                   onChange={handleChange}
                   min="0.01"
-                  max="99000"
+                  max="99999"
                   step="0.01"
                   className={`${s.input} ${errors.amount ? s.inputError : ''}`}
                   disabled={saving}
