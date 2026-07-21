@@ -1,6 +1,21 @@
 # Expense Voucher Management System
 
-A full-stack web application built as an internship assignment submission for **Prachay Securities Private Limited (PSPL)**. The system digitizes ABC Company's employee expense reimbursement workflow — employees create and submit vouchers with their signature, the Director reviews and approves or rejects them with a countersignature, and the Accounts team has read-only access to the full audit trail. All three roles operate from a single authenticated platform with strict role-based access control.
+A full-stack web application that digitizes an employee expense reimbursement workflow - employees create and submit vouchers with their signature, a Director reviews and approves or rejects them with a countersignature, and an Accounts team has read-only access to the full audit trail. All three roles operate from a single authenticated platform with strict role-based access control.
+
+## Live Demo
+
+- Frontend: https://expense-voucher-management-system-flax.vercel.app
+- Backend health check: https://expense-voucher-management-system-okn5.onrender.com/api/health
+
+### Test Credentials
+
+| Role | Email | Password |
+|---|---|---|
+| Employee | emp@test.com | test123 |
+| Director | director@test.com | password123 |
+| Accounts | accounts@test.com | password123 |
+
+These accounts already exist in the deployed database, so reviewers can log in directly without registering new users via the API.
 
 ---
 
@@ -110,11 +125,16 @@ SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
 # Server port
 PORT=5000
+
+# Comma-separated frontend origins allowed to call this API
+CORS_ORIGIN="http://localhost:5173,https://your-deployed-frontend-url.vercel.app"
 ```
 
 > **Note:** If using a local PostgreSQL instance, set both `DATABASE_URL` and `DIRECT_URL` to the same local connection string and remove the `pgbouncer` query parameter.
 
 > **Security note:** `SUPABASE_SERVICE_ROLE_KEY` is backend-only and must never be exposed to the frontend. The service role key bypasses Supabase Row Level Security and should only be configured in server environment variables such as Render's backend environment.
+
+> **CORS note:** In production, `CORS_ORIGIN` must include the actual deployed frontend URL or browser requests will be blocked by CORS. After changing it on Render, redeploy the backend so the new value is loaded.
 
 ### Supabase Storage Setup
 
@@ -357,6 +377,34 @@ DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED
 
 ---
 
+## Deployment Notes
+
+### Backend on Render
+
+Deploy the backend as a Render Web Service with:
+
+- Root Directory: `backend`
+- Build Command: `npm install && npm run build`
+- Start Command: `npm start`
+
+### Frontend on Vercel
+
+Deploy the frontend on Vercel with Root Directory set to `frontend`. Vercel auto-detects the app as Vite.
+
+The frontend requires a `vercel.json` file inside `frontend/` so React Router client-side routes such as `/login` do not return a 404 on direct navigation or refresh:
+
+```json
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+After deploying the frontend, update the backend's `CORS_ORIGIN` environment variable on Render to include the live frontend URL, then manually redeploy the backend for the change to take effect.
+
+---
+
 ## Folder Structure
 
 ```
@@ -394,6 +442,7 @@ voucher-management/
 │
 └── frontend/
     ├── public/
+    ├── vercel.json            # Vercel SPA rewrite config
     ├── src/
     │   ├── App.jsx                  # Root router with all protected routes
     │   ├── main.jsx                 # React entry point
@@ -432,6 +481,3 @@ voucher-management/
     └── package.json
 ```
 
----
-
-*Built by Afifa Shaikh.*
