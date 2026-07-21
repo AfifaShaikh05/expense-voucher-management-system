@@ -1,19 +1,45 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const { uploadDir } = require('./config/uploads');
 
 // Initialize the Express application
 const app = express();
 
 // --- Middlewares ---
 
-// Enable Cross-Origin Resource Sharing (CORS) for all origins during development
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const isLocalOrigin = (origin) => {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch (error) {
+    return false;
+  }
+};
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    if (process.env.NODE_ENV !== 'production' && isLocalOrigin(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(null, false);
+  }
+}));
 
 // Parse incoming requests with JSON payloads (replaces body-parser)
 app.use(express.json());
 
-// Serve uploaded files statically so they can be accessed via URL (e.g., http://localhost:5000/uploads/...)
-app.use('/uploads', express.static(require('path').join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.dirname(uploadDir)));
 
 // --- Routes ---
 

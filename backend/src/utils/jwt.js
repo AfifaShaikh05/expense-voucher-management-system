@@ -1,16 +1,23 @@
 const jwt = require('jsonwebtoken');
 
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET is required in production');
+  }
+
+  return secret || 'fallback_secret_please_change';
+};
+
 /**
  * Generates a JSON Web Token for a given payload.
  * @param {Object} payload - Data to encode in the token (e.g., { userId, role })
  * @returns {string} - The signed JWT
  */
 const generateToken = (payload) => {
-  // Uses JWT_SECRET from .env, falls back to a default if not found (not recommended for production)
-  const secret = process.env.JWT_SECRET || 'fallback_secret_please_change';
-  
   // Sign the token to expire in 7 days
-  return jwt.sign(payload, secret, { expiresIn: '7d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 };
 
 /**
@@ -19,8 +26,7 @@ const generateToken = (payload) => {
  * @returns {Object} - The decoded payload if valid
  */
 const verifyToken = (token) => {
-  const secret = process.env.JWT_SECRET || 'fallback_secret_please_change';
-  return jwt.verify(token, secret);
+  return jwt.verify(token, getJwtSecret());
 };
 
 module.exports = {

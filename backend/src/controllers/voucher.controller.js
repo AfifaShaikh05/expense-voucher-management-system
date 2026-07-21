@@ -1,5 +1,8 @@
 const prisma = require('../config/db');
 const generateVoucherNumber = require('../utils/generateVoucherNumber');
+const path = require('path');
+const fs = require('fs');
+const { uploadDir } = require('../config/uploads');
 
 /**
  * Helper to validate voucher input data
@@ -128,9 +131,7 @@ const deleteEmployeeSignature = async (req, res, next) => {
     }
 
     if (existingVoucher.employeeSignature) {
-      const fs = require('fs');
-      const path = require('path');
-      const filePath = path.join(__dirname, '../../uploads/signatures', existingVoucher.employeeSignature);
+      const filePath = path.join(uploadDir, existingVoucher.employeeSignature);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }

@@ -7,10 +7,14 @@ const app = require('./app');
 // Define the port to run on, defaulting to 5000 if not specified in .env
 const PORT = process.env.PORT || 5000;
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET is required in production');
+}
+
 // Start the Express server
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Server is up and running on port ${PORT}`);
-  console.log(`👉 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`Server is up and running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
 
 // Optional: Handle unhandled promise rejections gracefully
