@@ -1,8 +1,10 @@
 const prisma = require('../config/db');
 const generateVoucherNumber = require('../utils/generateVoucherNumber');
-const path = require('path');
-const fs = require('fs');
-const { uploadDir } = require('../config/uploads');
+const {
+  uploadSignature,
+  getSignedSignatureUrl,
+  deleteSignature
+} = require('../utils/signatureStorage');
 
 /**
  * Helper to validate voucher input data
@@ -19,6 +21,20 @@ const validateVoucherInput = (data) => {
   if (typeof amount !== 'number' || amount <= 0) return 'Amount must be greater than 0';
 
   return null;
+};
+
+const resolveVoucherSignatureUrls = async (voucher) => {
+  if (!voucher) return voucher;
+
+  return {
+    ...voucher,
+    employeeSignature: await getSignedSignatureUrl(voucher.employeeSignature),
+    directorSignature: await getSignedSignatureUrl(voucher.directorSignature)
+  };
+};
+
+const resolveVoucherListSignatureUrls = async (vouchers) => {
+  return Promise.all(vouchers.map(resolveVoucherSignatureUrls));
 };
 
 /**
@@ -53,9 +69,11 @@ const createVoucher = async (req, res, next) => {
       }
     });
 
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(newVoucher);
+
     return res.status(201).json({
       message: 'Voucher created successfully',
-      voucher: newVoucher
+      voucher: voucherWithSignedUrls
     });
   } catch (error) {
     next(error); // Pass to centralized error handler
@@ -90,16 +108,24 @@ const uploadEmployeeSignature = async (req, res, next) => {
       return res.status(400).json({ message: 'Signature can only be uploaded while voucher is DRAFT' });
     }
 
+    const employeeSignature = await uploadSignature(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname,
+      id,
+      'employee'
+    );
+
     const updatedVoucher = await prisma.voucher.update({
       where: { id },
-      data: {
-        employeeSignature: req.file.filename // Save the generated filename from Multer
-      }
+      data: { employeeSignature }
     });
+
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(updatedVoucher);
 
     return res.status(200).json({
       message: 'Signature uploaded successfully',
-      voucher: updatedVoucher
+      voucher: voucherWithSignedUrls
     });
   } catch (error) {
     next(error);
@@ -131,10 +157,7 @@ const deleteEmployeeSignature = async (req, res, next) => {
     }
 
     if (existingVoucher.employeeSignature) {
-      const filePath = path.join(uploadDir, existingVoucher.employeeSignature);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      await deleteSignature(existingVoucher.employeeSignature);
     }
 
     const updatedVoucher = await prisma.voucher.update({
@@ -144,9 +167,11 @@ const deleteEmployeeSignature = async (req, res, next) => {
       }
     });
 
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(updatedVoucher);
+
     return res.status(200).json({
       message: 'Signature deleted successfully',
-      voucher: updatedVoucher
+      voucher: voucherWithSignedUrls
     });
   } catch (error) {
     next(error);
@@ -196,9 +221,11 @@ const updateVoucher = async (req, res, next) => {
       }
     });
 
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(updatedVoucher);
+
     return res.status(200).json({
       message: 'Voucher updated successfully',
-      voucher: updatedVoucher
+      voucher: voucherWithSignedUrls
     });
 
   } catch (error) {
@@ -277,9 +304,11 @@ const submitVoucher = async (req, res, next) => {
       }
     });
 
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(updatedVoucher);
+
     return res.status(200).json({
       message: 'Voucher submitted successfully',
-      voucher: updatedVoucher
+      voucher: voucherWithSignedUrls
     });
   } catch (error) {
     next(error);
@@ -308,8 +337,10 @@ const getMyVouchers = async (req, res, next) => {
       })
     ]);
 
+    const vouchersWithSignedUrls = await resolveVoucherListSignatureUrls(vouchers);
+
     return res.status(200).json({
-      vouchers,
+      vouchers: vouchersWithSignedUrls,
       meta: {
         total,
         page,
@@ -343,7 +374,9 @@ const getVoucherDetails = async (req, res, next) => {
       return res.status(403).json({ message: 'Access denied: this voucher does not belong to you' });
     }
 
-    return res.status(200).json({ voucher });
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(voucher);
+
+    return res.status(200).json({ voucher: voucherWithSignedUrls });
   } catch (error) {
     next(error);
   }

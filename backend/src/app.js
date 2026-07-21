@@ -1,7 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const { uploadDir } = require('./config/uploads');
 
 // Initialize the Express application
 const app = express();
@@ -38,8 +36,6 @@ app.use(cors({
 
 // Parse incoming requests with JSON payloads (replaces body-parser)
 app.use(express.json());
-
-app.use('/uploads', express.static(path.dirname(uploadDir)));
 
 // --- Routes ---
 

@@ -1,5 +1,20 @@
 const prisma = require('../config/db');
 const { buildVoucherQuery } = require('../utils/voucherFilters');
+const { uploadSignature, getSignedSignatureUrl } = require('../utils/signatureStorage');
+
+const resolveVoucherSignatureUrls = async (voucher) => {
+  if (!voucher) return voucher;
+
+  return {
+    ...voucher,
+    employeeSignature: await getSignedSignatureUrl(voucher.employeeSignature),
+    directorSignature: await getSignedSignatureUrl(voucher.directorSignature)
+  };
+};
+
+const resolveVoucherListSignatureUrls = async (vouchers) => {
+  return Promise.all(vouchers.map(resolveVoucherSignatureUrls));
+};
 
 /**
  * View ALL vouchers in the system (with basic pagination, filtering, and sorting)
@@ -40,8 +55,10 @@ const getAllVouchers = async (req, res, next) => {
       prisma.voucher.count({ where })
     ]);
 
+    const vouchersWithSignedUrls = await resolveVoucherListSignatureUrls(vouchers);
+
     return res.status(200).json({
-      vouchers,
+      vouchers: vouchersWithSignedUrls,
       meta: {
         total,
         page,
@@ -81,8 +98,10 @@ const getPendingVouchers = async (req, res, next) => {
       prisma.voucher.count({ where })
     ]);
 
+    const vouchersWithSignedUrls = await resolveVoucherListSignatureUrls(vouchers);
+
     return res.status(200).json({
-      vouchers,
+      vouchers: vouchersWithSignedUrls,
       meta: {
         total,
         page,
@@ -119,7 +138,9 @@ const getVoucherDetails = async (req, res, next) => {
       return res.status(404).json({ message: 'Voucher not found' });
     }
 
-    return res.status(200).json({ voucher });
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(voucher);
+
+    return res.status(200).json({ voucher: voucherWithSignedUrls });
   } catch (error) {
     next(error);
   }
@@ -136,7 +157,6 @@ const approveVoucher = async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({ message: 'Director signature file is required for approval' });
     }
-    const directorSignature = req.file.filename;
 
     const existingVoucher = await prisma.voucher.findUnique({
       where: { id }
@@ -149,6 +169,14 @@ const approveVoucher = async (req, res, next) => {
     if (existingVoucher.status !== 'PENDING_APPROVAL') {
       return res.status(400).json({ message: 'Only vouchers in PENDING_APPROVAL status can be approved' });
     }
+
+    const directorSignature = await uploadSignature(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname,
+      id,
+      'director'
+    );
 
     // Critical business rule: explicitly whitelist ONLY the fields the Director is allowed to modify.
     // It is structurally impossible to modify employee-entered fields via this update object.
@@ -163,9 +191,11 @@ const approveVoucher = async (req, res, next) => {
       }
     });
 
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(updatedVoucher);
+
     return res.status(200).json({
       message: 'Voucher approved successfully',
-      voucher: updatedVoucher
+      voucher: voucherWithSignedUrls
     });
   } catch (error) {
     next(error);
@@ -209,9 +239,11 @@ const rejectVoucher = async (req, res, next) => {
       }
     });
 
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(updatedVoucher);
+
     return res.status(200).json({
       message: 'Voucher rejected successfully',
-      voucher: updatedVoucher
+      voucher: voucherWithSignedUrls
     });
   } catch (error) {
     next(error);
@@ -295,4 +327,3 @@ module.exports = {
   rejectVoucher,
   getDirectorDashboard
 };
-

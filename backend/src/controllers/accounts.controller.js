@@ -1,5 +1,20 @@
 const prisma = require('../config/db');
 const { buildVoucherQuery } = require('../utils/voucherFilters');
+const { getSignedSignatureUrl } = require('../utils/signatureStorage');
+
+const resolveVoucherSignatureUrls = async (voucher) => {
+  if (!voucher) return voucher;
+
+  return {
+    ...voucher,
+    employeeSignature: await getSignedSignatureUrl(voucher.employeeSignature),
+    directorSignature: await getSignedSignatureUrl(voucher.directorSignature)
+  };
+};
+
+const resolveVoucherListSignatureUrls = async (vouchers) => {
+  return Promise.all(vouchers.map(resolveVoucherSignatureUrls));
+};
 
 /**
  * View ALL vouchers org-wide (Read-only)
@@ -43,8 +58,10 @@ const getAllVouchers = async (req, res, next) => {
       prisma.voucher.count({ where })
     ]);
 
+    const vouchersWithSignedUrls = await resolveVoucherListSignatureUrls(vouchers);
+
     return res.status(200).json({
-      vouchers,
+      vouchers: vouchersWithSignedUrls,
       meta: {
         total,
         page,
@@ -81,7 +98,9 @@ const getVoucherDetails = async (req, res, next) => {
       return res.status(404).json({ message: 'Voucher not found' });
     }
 
-    return res.status(200).json({ voucher });
+    const voucherWithSignedUrls = await resolveVoucherSignatureUrls(voucher);
+
+    return res.status(200).json({ voucher: voucherWithSignedUrls });
   } catch (error) {
     next(error);
   }

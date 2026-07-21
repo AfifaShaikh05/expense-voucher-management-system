@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
+import ImageModal from '../../components/ImageModal';
 import {
   deleteEmployeeSignature,
   getVoucherById,
@@ -9,8 +10,6 @@ import {
 } from '../../api/vouchers';
 import s from './employee.module.css';
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
 
 const STATUS_META = {
   DRAFT: { cls: s.badgeDraft, label: 'Draft' },
@@ -30,8 +29,6 @@ const fmtDate = (dateStr) =>
     : '-';
 
 const fmtAmount = (amount) => `INR ${Number(amount || 0).toLocaleString('en-IN')}`;
-const signatureUrl = (filename) =>
-  filename ? `${API_BASE}/uploads/signatures/${filename}` : '';
 
 const DetailItem = ({ label, value, fullWidth = false }) => (
   <div className={s.detailItem} style={fullWidth ? { gridColumn: '1 / -1' } : undefined}>
@@ -50,6 +47,7 @@ const VoucherDetails = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [actionLoading, setActionLoading] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   const fetchVoucher = async () => {
     try {
@@ -156,8 +154,8 @@ const VoucherDetails = () => {
 
   const isDraft = voucher.status === 'DRAFT';
   const statusMeta = STATUS_META[voucher.status] || { cls: s.badgeDraft, label: voucher.status };
-  const employeeSignatureUrl = signatureUrl(voucher.employeeSignature);
-  const directorSignatureUrl = signatureUrl(voucher.directorSignature);
+  const employeeSignatureUrl = voucher.employeeSignature;
+  const directorSignatureUrl = voucher.directorSignature;
 
   return (
     <div className={s.page}>
@@ -224,9 +222,13 @@ const VoucherDetails = () => {
             <div className={s.detailItemInlineSig}>
               <div className={s.detailLabel}>Employee Signature</div>
               {employeeSignatureUrl ? (
-                <a href={employeeSignatureUrl} target="_blank" rel="noreferrer">
-                  <img src={employeeSignatureUrl} alt="Employee Signature" className={s.signaturePreview} />
-                </a>
+                <img
+                  src={employeeSignatureUrl}
+                  alt="Employee Signature"
+                  className={`${s.signaturePreview} ${s.clickablePreview}`}
+                  onClick={() => setPreviewImage({ imageUrl: employeeSignatureUrl, altText: 'Employee Signature' })}
+                  title="Click to view signature"
+                />
               ) : (
                 <div className={s.detailValue} style={{ color: '#6b7280' }}>Not provided</div>
               )}
@@ -264,9 +266,13 @@ const VoucherDetails = () => {
             <div className={s.detailItemInlineSig}>
               <div className={s.detailLabel}>Director Signature</div>
               {directorSignatureUrl ? (
-                <a href={directorSignatureUrl} target="_blank" rel="noreferrer">
-                  <img src={directorSignatureUrl} alt="Director Signature" className={s.signaturePreview} />
-                </a>
+                <img
+                  src={directorSignatureUrl}
+                  alt="Director Signature"
+                  className={`${s.signaturePreview} ${s.clickablePreview}`}
+                  onClick={() => setPreviewImage({ imageUrl: directorSignatureUrl, altText: 'Director Signature' })}
+                  title="Click to view signature"
+                />
               ) : (
                 <div className={s.detailValue} style={{ color: '#6b7280' }}>Not approved yet</div>
               )}
@@ -274,6 +280,12 @@ const VoucherDetails = () => {
           </div>
         </div>
       </div>
+      <ImageModal
+        imageUrl={previewImage?.imageUrl}
+        altText={previewImage?.altText || 'Signature Preview'}
+        isOpen={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 };

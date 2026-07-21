@@ -1,12 +1,11 @@
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
+import ImageModal from '../../components/ImageModal';
 import { getVoucherById } from '../../api/accounts';
 import s from '../employee/employee.module.css';
 import p from './AccountsVoucherDetail.module.css';
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
 
 const STATUS_META = {
   DRAFT: { cls: s.badgeDraft, label: 'Draft' },
@@ -38,8 +37,6 @@ const fmtDateTime = (dateStr) =>
 
 const fmtAmount = (amount) => `INR ${Number(amount || 0).toLocaleString('en-IN')}`;
 
-const signatureUrl = (filename) =>
-  filename ? `${API_BASE}/uploads/signatures/${filename}` : '';
 
 const DetailItem = ({ label, value, fullWidth = false, children }) => (
   <div
@@ -51,20 +48,18 @@ const DetailItem = ({ label, value, fullWidth = false, children }) => (
   </div>
 );
 
-const SignatureItem = ({ label, filename, fallback }) => {
-  const url = signatureUrl(filename);
-
+const SignatureItem = ({ label, url, fallback, onPreview }) => {
   return (
     <div className={s.detailItemInlineSig}>
       <div className={`${s.detailLabel} ${p.printLabel}`}>{label}</div>
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer" title="Open signature" className={p.printSignatureLink}>
-          <img
-            src={url}
-            alt={label}
-            className={`${s.signaturePreview} ${p.printSignatureImage}`}
-          />
-        </a>
+        <img
+          src={url}
+          alt={label}
+          className={`${s.signaturePreview} ${s.clickablePreview} ${p.printSignatureImage}`}
+          onClick={onPreview}
+          title="Click to view signature"
+        />
       ) : (
         <div className={`${s.detailValue} ${p.printValue}`} style={{ color: '#6b7280' }}>
           {fallback}
@@ -81,6 +76,7 @@ const AccountsVoucherDetail = () => {
   const [voucher, setVoucher] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [previewImage, setPreviewImage] = useState(null);
 
   useEffect(() => {
     const fetchVoucher = async () => {
@@ -192,8 +188,9 @@ const AccountsVoucherDetail = () => {
               <DetailItem label="Employee ID" value={voucher.employee?.employeeId} />
               <SignatureItem
                 label="Employee Signature"
-                filename={voucher.employeeSignature}
+                url={voucher.employeeSignature}
                 fallback="Not provided"
+                onPreview={() => setPreviewImage({ imageUrl: voucher.employeeSignature, altText: 'Employee Signature' })}
               />
             </div>
           </div>
@@ -206,8 +203,9 @@ const AccountsVoucherDetail = () => {
               <DetailItem label="Approval Date" value={fmtDate(voucher.approvalDate)} />
               <SignatureItem
                 label="Director Signature"
-                filename={voucher.directorSignature}
+                url={voucher.directorSignature}
                 fallback="Not approved yet"
+                onPreview={() => setPreviewImage({ imageUrl: voucher.directorSignature, altText: 'Director Signature' })}
               />
             </div>
           </div>
@@ -221,9 +219,14 @@ const AccountsVoucherDetail = () => {
           </div>
         </div>
       </div>
+      <ImageModal
+        imageUrl={previewImage?.imageUrl}
+        altText={previewImage?.altText || 'Signature Preview'}
+        isOpen={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 };
 
 export default AccountsVoucherDetail;
-

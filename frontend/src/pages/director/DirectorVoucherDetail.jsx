@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
+import ImageModal from '../../components/ImageModal';
 import { getVoucherById, approveVoucher, rejectVoucher } from '../../api/director';
 import s from '../employee/employee.module.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
 
 const STATUS_META = {
   DRAFT:            { cls: s.badgeDraft,     label: 'Draft' },
@@ -38,9 +38,9 @@ const DirectorVoucherDetail = () => {
   // Rejection State
   const [rejectionReason, setRejectionReason] = useState('');
 
-  // Modal State: 'APPROVE' | 'REJECT' | 'PREVIEW' | null
+  // Modal State: 'APPROVE' | 'REJECT' | null
   const [activeModal, setActiveModal] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewImage, setPreviewImage] = useState(null);
 
   const fetchVoucher = async () => {
     try {
@@ -232,13 +232,10 @@ const DirectorVoucherDetail = () => {
               <div className={s.detailLabel}>Employee Signature</div>
               {voucher.employeeSignature ? (
                 <img
-                  src={`${API_BASE}/uploads/signatures/${voucher.employeeSignature}`}
+                  src={voucher.employeeSignature}
                   alt="Employee Signature"
                   className={`${s.signaturePreview} ${s.clickablePreview}`}
-                  onClick={() => {
-                    setPreviewUrl(`${API_BASE}/uploads/signatures/${voucher.employeeSignature}`);
-                    setActiveModal('PREVIEW');
-                  }}
+                  onClick={() => setPreviewImage({ imageUrl: voucher.employeeSignature, altText: 'Employee Signature' })}
                   title="Click to view signature"
                 />
               ) : (
@@ -250,13 +247,10 @@ const DirectorVoucherDetail = () => {
               <div className={s.detailLabel}>Director Signature</div>
               {voucher.directorSignature ? (
                 <img
-                  src={`${API_BASE}/uploads/signatures/${voucher.directorSignature}`}
+                  src={voucher.directorSignature}
                   alt="Director Signature"
                   className={`${s.signaturePreview} ${s.clickablePreview}`}
-                  onClick={() => {
-                    setPreviewUrl(`${API_BASE}/uploads/signatures/${voucher.directorSignature}`);
-                    setActiveModal('PREVIEW');
-                  }}
+                  onClick={() => setPreviewImage({ imageUrl: voucher.directorSignature, altText: 'Director Signature' })}
                   title="Click to view signature"
                 />
               ) : (
@@ -278,7 +272,7 @@ const DirectorVoucherDetail = () => {
       {activeModal && (
         <div className={s.modalOverlay} onClick={closeModal}>
           <div
-            className={`${s.modalContent} ${activeModal === 'PREVIEW' ? s.modalContentPreview : ''}`}
+            className={s.modalContent}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Approve Modal */}
@@ -352,22 +346,15 @@ const DirectorVoucherDetail = () => {
                 </div>
               </form>
             )}
-
-            {/* Signature Preview Modal */}
-            {activeModal === 'PREVIEW' && (
-              <>
-                <div className={s.modalHeader}>🔍 Signature Preview</div>
-                <div className={s.modalBody}>
-                  <img src={previewUrl} alt="Signature Preview" className={s.modalPreviewImg} />
-                </div>
-                <div className={s.modalFooter}>
-                  <button type="button" className={s.btnSecondary} onClick={closeModal}>Close</button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}
+      <ImageModal
+        imageUrl={previewImage?.imageUrl}
+        altText={previewImage?.altText || 'Signature Preview'}
+        isOpen={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 };
