@@ -14,7 +14,9 @@ A full-stack web application built as an internship assignment submission for **
 | `prisma` | ^6.19.3 | Schema migrations and Prisma CLI |
 | `jsonwebtoken` | ^9.0.3 | JWT-based stateless authentication |
 | `bcryptjs` | ^3.0.3 | Password hashing |
-| `multer` | ^2.2.0 | Multipart form data / signature image uploads |
+| `multer` | ^2.2.0 | Multipart form data parsing for in-memory signature uploads |
+| `@supabase/supabase-js` | ^2.110.8 | Server-side Supabase Storage client for signature images |
+| `uuid` | ^9.0.1 | Unique signature object names in storage |
 | `cors` | ^2.8.6 | Cross-Origin Resource Sharing |
 | `dotenv` | ^17.4.2 | Environment variable loading |
 | `nodemon` | ^3.1.14 | Dev server hot-reload |
@@ -30,6 +32,10 @@ A full-stack web application built as an internship assignment submission for **
 
 ### Database
 - **PostgreSQL** hosted on **Supabase** (Transaction Pooler mode)
+
+### File Storage
+- Signature images are stored in a private **Supabase Storage** bucket named `signatures`, not on local disk.
+- The backend stores only the Supabase Storage object path in PostgreSQL and generates short-lived signed URLs with a 5-minute expiry when returning voucher details. Signature files are not served through public links.
 
 ---
 
@@ -98,11 +104,21 @@ DIRECT_URL="postgresql://postgres.[project-ref]:[password]@db.[project-ref].supa
 # JWT signing secret (use a long random string)
 JWT_SECRET="your-very-long-and-random-secret"
 
+# Supabase project URL and service role key for private server-side Storage uploads
+SUPABASE_URL="https://your-project-ref.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+
 # Server port
 PORT=5000
 ```
 
 > **Note:** If using a local PostgreSQL instance, set both `DATABASE_URL` and `DIRECT_URL` to the same local connection string and remove the `pgbouncer` query parameter.
+
+> **Security note:** `SUPABASE_SERVICE_ROLE_KEY` is backend-only and must never be exposed to the frontend. The service role key bypasses Supabase Row Level Security and should only be configured in server environment variables such as Render's backend environment.
+
+### Supabase Storage Setup
+
+In your Supabase project, create a private Storage bucket named `signatures`. Keep the bucket private; the Express backend uploads signatures with the service role key, stores paths such as `employee/<voucher-id>-<uuid>.png` or `director/<voucher-id>-<uuid>.png`, and returns 5-minute signed URLs when voucher details are fetched. Configure the bucket with a 2MB file size limit and restrict allowed MIME types to `image/jpeg` and `image/png`, matching the limits enforced by the backend's Multer upload middleware.
 
 **4. Run Prisma migrations:**
 ```bash
@@ -236,10 +252,10 @@ DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED
 | `expenseDescription` | `String?` | Optional |
 | `amount` | `Float` | Must be > 0 |
 | `employeeId` | `String` | Foreign key → `User.id` |
-| `employeeSignature` | `String?` | Filename of uploaded signature image (stored on disk) |
+| `employeeSignature` | `String?` | Supabase Storage path for the employee signature; API resolves it to a signed URL at response time |
 | `status` | `VoucherStatus` | Default: `DRAFT` |
 | `directorId` | `String?` | Foreign key → `User.id` (set on approval/rejection) |
-| `directorSignature` | `String?` | Filename of director's uploaded signature |
+| `directorSignature` | `String?` | Supabase Storage path for the director signature; API resolves it to a signed URL at response time |
 | `approvalDate` | `DateTime?` | Timestamp of approval (null if not approved) |
 | `rejectionReason` | `String?` | Rejection reason text (null if not rejected) |
 | `createdAt` | `DateTime` | Auto-set on creation |
@@ -330,7 +346,6 @@ DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED
 
 ## Known Limitations / Future Improvements
 
-- **Local file storage:** Signature images are stored on the server's local disk. This means they are lost on server restart if using an ephemeral filesystem (e.g., Heroku, Railway free tier) and cannot scale horizontally. **Priority fix for production.**
 - **No automated tests:** The codebase does not include unit or integration tests. All testing was done manually via the browser and API client during development.
 - **No email notifications:** There are no email alerts when a voucher is submitted, approved, or rejected. Employees must check the app manually for status updates.
 - **Public registration:** The `/api/auth/register` endpoint is open. In production, this should be moved behind an admin-only authenticated route.
@@ -351,10 +366,11 @@ voucher-management/
 │   │   ├── schema.prisma          # Data models, enums, and datasource config
 │   │   └── migrations/            # Auto-generated Prisma migration history
 │   ├── src/
-│   │   ├── app.js                 # Express app setup: routes, middleware, static files
+│   │   ├── app.js                 # Express app setup: routes and middleware
 │   │   ├── server.js              # HTTP server entry point
 │   │   ├── config/
-│   │   │   └── db.js              # Prisma client singleton
+│   │   │   ├── db.js              # Prisma client singleton
+│   │   │   └── supabase.js        # Supabase service-role Storage client
 │   │   ├── controllers/
 │   │   │   ├── auth.controller.js
 │   │   │   ├── voucher.controller.js  # Employee voucher operations
@@ -372,9 +388,8 @@ voucher-management/
 │   │   │   └── accounts.routes.js
 │   │   ├── utils/
 │   │   │   ├── generateVoucherNumber.js  # VCH-YYYY-XXXXXX auto-numbering
+│   │   │   ├── signatureStorage.js       # Upload/delete/sign Supabase Storage signatures
 │   │   │   └── voucherFilters.js         # Shared search/filter/sort query builder
-│   │   └── uploads/
-│   │       └── signatures/           # Uploaded signature image files (gitignored)
 │   └── package.json
 │
 └── frontend/
